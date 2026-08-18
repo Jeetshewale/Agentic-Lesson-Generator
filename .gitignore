@@ -1,0 +1,14 @@
+# Environments
+.env
+__pycache__/
+*.pyc
+
+# Databases
+backend/data/memory.db
+backend/data/*.db
+
+# n8n Docker Data
+n8n/data/
+
+# OS Files
+.DS_Store

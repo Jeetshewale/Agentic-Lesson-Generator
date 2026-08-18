@@ -1,0 +1,165 @@
+{
+  "name": "Lesson Generator Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-lesson",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [ 0, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/select-prompt",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "topic",
+              "value": "={{ $json.body.topic }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-prompt-node",
+      "name": "Get RL Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 220, 300 ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.topic }}\n\nNote: If 'force_error' is true, please deliberately make a mistake in your lesson to test the evaluator.",
+        "options": {
+          "systemMessage": "={{ $json.prompt_content }}"
+        }
+      },
+      "id": "generator-node",
+      "name": "AI Generator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [ 440, 300 ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Evaluate this lesson:\n\n{{ $json.output }}",
+        "options": {
+          "systemMessage": "You are an expert evaluator. Your job is to evaluate the provided lesson against a strict 6-point rubric.\nReturn a JSON object containing the evaluation results.\n\nRubric Checkpoints:\n1. \"accurate_and_grounded\"\n2. \"beginner_friendly_language\"\n3. \"teaches_by_example\"\n4. \"no_unexplained_jargon\"\n5. \"covers_key_points\"\n6. \"coherent_teaching_flow\"\n\nYour output must be structured exactly like this:\n{\n  \"checkpoints\": [\n    {\n      \"name\": \"accurate_and_grounded\",\n      \"passed\": true|false,\n      \"reasoning\": \"Explain why\",\n      \"evidence\": \"Quote\",\n      \"suggestion\": \"How to fix or null\"\n    }\n  ],\n  \"overall_passed\": true|false,\n  \"total_score\": 0.0\n}"
+        }
+      },
+      "id": "evaluator-node",
+      "name": "AI Evaluator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [ 660, 300 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "try {\n  const evaluation = JSON.parse($input.item.json.output);\n  const weights = {\n    accurate_and_grounded: 0.25,\n    beginner_friendly_language: 0.20,\n    teaches_by_example: 0.15,\n    no_unexplained_jargon: 0.15,\n    covers_key_points: 0.15,\n    coherent_teaching_flow: 0.10\n  };\n\n  let reward = 0;\n  let failures = [];\n  let allPassed = true;\n\n  for (const checkpoint of evaluation.checkpoints) {\n    if (checkpoint.passed) {\n      reward += weights[checkpoint.name];\n    } else {\n      allPassed = false;\n      failures.push(checkpoint);\n    }\n  }\n\n  return {\n    json: {\n      reward: reward,\n      allPassed: allPassed,\n      failures: failures,\n      evaluation: evaluation,\n      variant_id: $node[\"Get RL Prompt\"].json.variant_id,\n      topic: $node[\"Webhook Trigger\"].json.body.topic,\n      original_lesson: $node[\"AI Generator\"].json.output\n    }\n  };\n} catch (e) {\n  return { json: { error: e.message, allPassed: false, reward: 0 } };\n}"
+      },
+      "id": "reward-node",
+      "name": "Compute Reward",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 880, 300 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/update-reward",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "variant_id",
+              "value": "={{ $json.variant_id }}"
+            },
+            {
+              "name": "reward",
+              "value": "={{ $json.reward }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-reward-node",
+      "name": "Update RL Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 1100, 300 ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.allPassed }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-node",
+      "name": "Did it pass?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 1320, 300 ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Fix this lesson:\n\n{{ $json.original_lesson }}\n\nFeedback:\n{{ JSON.stringify($json.failures) }}",
+        "options": {
+          "systemMessage": "You are a master content editor. Your job is to fix a lesson that failed evaluation. Rewrite the lesson to incorporate the suggestions and fix all the failures. Do not output anything other than the rewritten lesson."
+        }
+      },
+      "id": "regenerator-node",
+      "name": "AI Regenerator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [ 1320, 100 ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [ [ { "node": "Get RL Prompt", "type": "main", "index": 0 } ] ]
+    },
+    "Get RL Prompt": {
+      "main": [ [ { "node": "AI Generator", "type": "main", "index": 0 } ] ]
+    },
+    "AI Generator": {
+      "main": [ [ { "node": "AI Evaluator", "type": "main", "index": 0 } ] ]
+    },
+    "AI Evaluator": {
+      "main": [ [ { "node": "Compute Reward", "type": "main", "index": 0 } ] ]
+    },
+    "Compute Reward": {
+      "main": [ [ { "node": "Update RL Backend", "type": "main", "index": 0 } ] ]
+    },
+    "Update RL Backend": {
+      "main": [ [ { "node": "Did it pass?", "type": "main", "index": 0 } ] ]
+    },
+    "Did it pass?": {
+      "main": [
+        [], 
+        [ { "node": "AI Regenerator", "type": "main", "index": 0 } ]
+      ]
+    },
+    "AI Regenerator": {
+      "main": [ [ { "node": "AI Evaluator", "type": "main", "index": 0 } ] ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
