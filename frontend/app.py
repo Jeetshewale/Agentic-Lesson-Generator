@@ -4,9 +4,11 @@ import json
 import time
 
 st.set_page_config(page_title="Agentic Lesson Generator", page_icon="🤖", layout="wide")
+import os
 
-N8N_WEBHOOK = "http://localhost:5678/webhook/generate-lesson"
-BACKEND_URL = "http://localhost:8000"
+# Use environment variables for deployment, fallback to localhost for local testing
+N8N_WEBHOOK = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/generate-lesson")
+BACKEND_URL = os.getenv("FASTAPI_BACKEND_URL", "http://localhost:8000")
 
 st.title("🤖 Agentic Lesson Content Generator")
 st.markdown("Generates, evaluates, and autonomously regenerates content until it clears a strict rubric.")

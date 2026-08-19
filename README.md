@@ -49,8 +49,8 @@ streamlit run app.py
 ```
 
 ### 4. Import the n8n Workflow
-1. Start n8n locally (`npx -y n8n`).
-2. Go to `http://localhost:5678`.
+1. Start n8n (either locally or on your cloud host).
+2. Open your n8n dashboard.
 3. Import the `n8n/workflows/lesson_generator.json` file.
 4. Add your Groq API credentials to the AI nodes.
 5. Activate the webhook!
