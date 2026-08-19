@@ -14,6 +14,7 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - GENERIC_TIMEZONE=Asia/Kolkata
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     volumes:
       - n8n_data:/home/node/.n8n    # Persists workflows & credentials across restarts
     restart: unless-stopped

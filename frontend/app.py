@@ -41,12 +41,31 @@ if st.button("Generate Lesson", type="primary"):
                     # Safely handle the response structure from n8n
                     if isinstance(data, list) and len(data) > 0:
                         lesson_text = data[0].get("original_lesson", "Could not parse lesson text.")
+                        rejections = data[0].get("rejection_log", [])
+                        first_draft = data[0].get("first_draft", "No original draft available.")
                     elif isinstance(data, dict):
                         lesson_text = data.get("original_lesson", "Could not parse lesson text.")
+                        rejections = data.get("rejection_log", [])
+                        first_draft = data.get("first_draft", "No original draft available.")
                     else:
                         lesson_text = str(data)
+                        rejections = []
+                        first_draft = "No original draft available."
                     
                     st.markdown(lesson_text)
+                    
+                    if rejections:
+                        with st.expander("🚨 Rejection Log (What the Regenerator Fixed)"):
+                            st.write("### The Initial Draft")
+                            st.markdown(first_draft)
+                            st.write("---")
+                            st.write("### Evaluation Failures")
+                            st.write("The draft above failed the following quality checkpoints and was sent back for regeneration:")
+                            for failure in rejections:
+                                st.error(f"**Failed Checkpoint:** {failure.get('name', 'Unknown')}")
+                                st.write(f"**Reason:** {failure.get('reasoning', 'No reason provided')}")
+                                if failure.get('suggestion'):
+                                    st.success(f"**Changes made on retry:** {failure.get('suggestion')}")
                     
                 with col2:
                     st.subheader("📊 RL Bandit Stats")
